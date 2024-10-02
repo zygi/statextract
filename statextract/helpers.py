@@ -76,7 +76,7 @@ def normalize_to_file_name(s: str):
 
 import sys
 
-def update_links(author_id: str, first_author: bool = True, pdf_author_link_path: Path = Path("data/pdf_author_links"), pdf_path: Path = Path("pdfs")):
+def update_links(author_id: str, first_author: bool = True, pdf_author_link_path: Path = Path("data/pdf_author_links"), pdf_path: Path = Path("data/pdfs")):
     mds = get_mds_with_dois(author_id, first_author)
     mds = filter_mds_by_pdf(mds)
     

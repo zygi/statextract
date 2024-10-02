@@ -1,0 +1,18 @@
+[project]
+name = "statextract"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx",
+    "beautifulsoup4",
+    "joblib",
+    "anthropic",
+    "pydantic",
+    # "pyyaml",
+    "instructor",
+    "pymupdf",
+    "pymupdf4llm",
+    "perscache",
+]
