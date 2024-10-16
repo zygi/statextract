@@ -1,3 +1,4 @@
+import copy
 import typing
 import abc
 import asyncio
@@ -6,6 +7,7 @@ from typing_extensions import final
 from anthropic import AsyncAnthropic
 import pydantic
 from instructor import function_calls
+from rich import print
 
 import anthropic.types as atypes
 
@@ -30,7 +32,13 @@ class Tool(typing.Generic[InputType, OutputType], abc.ABC):
     @abc.abstractmethod
     async def execute(self, input: InputType) -> OutputType:
         pass
-    
+
+    async def format_output(self, output: OutputType) -> str:
+        # return self.output_type.model_dump_json(output)
+        if isinstance(self.output_type, pydantic.BaseModel):
+            return self.output_type.model_dump_json(output)
+        return str(output)
+
     async def run(self, input: str) -> OutputType:
         try:
             parsed = self.input_type.model_validate_json(input)
@@ -145,62 +153,38 @@ where _ is a numeric value. Each test statistic should be in a separate string. 
     
     
 
-async def anthropic_tool_caller(client: AsyncAnthropic, tools: typing.Sequence[Tool], init_messages: list[atypes.MessageParam]):
-    def append_cache_control(dct: dict):
-        dct["cache_control"] = "ephemeral"
-    
-    tool_dict = {t.name: t for t in tools}
-    
-    message = await client.messages.create(
-        model="claude-3-5-sonnet-20240620",
-        max_tokens=1024,
-        system=[{"type": "text", "text": "You are a helpful assistant that can run R scripts."}],
-        tools = [append_cache_control(t.anthropic_schema) for t in tools], # type: ignore
-        messages=[
-            {"role": "user", "content": [{"type": "text", "text": "Hello, Claude"}]}
-        ]
+
+
+class TestCalculatorInput(pydantic.BaseModel):
+    a: float = pydantic.Field(description="The first number")
+    b: float = pydantic.Field(description="The second number")
+    op: typing.Literal["+", "-", "*", "/"] = pydantic.Field(
+        description="The operation to perform"
     )
-    
-    tool_results: list[atypes.ToolResultBlockParam] = []
-    
-    # find tool calls
-    if message.stop_reason == "tool_use":
-        for c in message.content:
-            if c.type == "tool_use":
-                if c.name not in tool_dict:
-                    tool_results.append({"tool_use_id": c.id, "is_error": True, "content": "Tool not found", "type": "tool_result"})
-                    continue
-                
-                tool = tool_dict[c.name]
-                # try 
-                
-                #     input = tool.input_type.model_validate_json(c.input.input)
-                #     output = await tool.execute(input)
-                #     message = await client.messages.create(
-                #         model="claude-3-5-sonnet-20240620",
-                #         max_tokens=1024,
-# test 
-if __name__ == "__main__":
-    # tool = RExecTool()
-    
-    # # test R script to do a simple t-test analysis
-    # TEST = """
-    # t.test(rnorm(100), rnorm(100, mean = 1))
-    # """
-    
-    # async def test_tool():
-    #     print(await tool.run(TEST))
-    
-    # asyncio.run(test_tool())
-    
-    # print(TestAnswer.anthropic_schema)
-    
-    async def print_cb(x: TestAnswer):
-        print(x)
-    
-    st = AnswerTool(TestAnswer, print_cb)
-    
-    async def test_tool():
-        print(await st.run("""{"bbb": [1, 2, 3], "answer": "42"}"""))
-    
-    asyncio.run(test_tool())
+
+
+@final
+class TestCalculatorTool(Tool[TestCalculatorInput, float]):
+    def __init__(self):
+        super().__init__(TestCalculatorInput, float)
+
+    async def execute(self, input: TestCalculatorInput) -> float:
+        if input.op == "+":
+            return input.a + input.b
+        elif input.op == "-":
+            return input.a - input.b
+        elif input.op == "*":
+            return input.a * input.b
+        elif input.op == "/":
+            return input.a / input.b
+        else:
+            raise Exception(f"Invalid operation: {input.op}")
+
+    @property
+    def name(self) -> str:
+        return "TestCalculatorTool"
+
+    @property
+    def description(self) -> str:
+        return "This tool allows you to perform basic arithmetic operations."
+

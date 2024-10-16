@@ -1,0 +1,20 @@
+[package]
+name = "pcurves_rs"
+version = "0.1.0"
+edition = "2021"
+
+
+[[bin]]
+name = "index_json"
+path = "src/index_json.rs"
+
+[dependencies]
+zstd-seekable = "0.1.23"
+zstd = "*"
+flate2 = "*"
+
+sonic-rs = "0.3"
+glob = "0.3"
+tqdm = "*"
+rayon = "*"
+genson-rs = "*"
