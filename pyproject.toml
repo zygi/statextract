@@ -15,4 +15,10 @@ dependencies = [
     "pymupdf",
     "pymupdf4llm",
     "perscache",
+    "opentelemetry-instrumentation-anthropic>=0.32.2",
+    "pyalex>=0.15.1",
+    "fastapi[standard]>=0.115.2",
+    "pypcurve>=0.1.1",
+    "pillow>=11.0.0",
+    "aiodbm>=0.4.2",
 ]

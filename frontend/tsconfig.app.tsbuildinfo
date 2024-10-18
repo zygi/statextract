@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/routeTree.gen.ts","./src/utils.ts","./src/vite-env.d.ts","./src/generated_types/index.ts","./src/generated_types/schemas.gen.ts","./src/generated_types/services.gen.ts","./src/generated_types/types.gen.ts","./src/routes/__root.tsx","./src/routes/author.$authorId.tsx","./src/routes/work.$id.tsx"],"errors":true,"version":"5.6.3"}

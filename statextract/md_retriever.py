@@ -16,7 +16,7 @@ def author_works(author_id: str):
     works = pyalex.Works().filter(author={"id": author_id}).paginate(per_page=100)
     return list(itertools.chain(*works))
 
-def convert_doi(work: Any):
+def parse_work(work: Any):
     # print(work)
     doi = work['doi']
     if doi is None:
@@ -29,7 +29,7 @@ def convert_doi(work: Any):
     title = work['title']
     author_names = [author['author']['display_name'] for author in work['authorships']]
     first_author = author_names[0]
-    return FullPaperMD(title=title if title else "<UNKNOWN>", author_names=author_names, first_author=first_author, doi=parts, full=work, id=work['id'])
+    return FullPaperMD(title=title if title else "<UNKNOWN>", author_names=author_names, first_author=first_author, doi=parts, full=work, id=work['id'], type=work['type'])
 
 
 def get_all_mds(author_id: str, first_author: bool = True, only_articles: bool = True):
@@ -41,7 +41,7 @@ def get_all_mds(author_id: str, first_author: bool = True, only_articles: bool =
     if only_articles:
         works = [work for work in works if work['type'] == 'article']
     
-    mds = [convert_doi(work) for work in works if 'doi' in work]
+    mds = [parse_work(work) for work in works if 'doi' in work]
     # mds = [md for md in mds if md is not None]
     return mds
 

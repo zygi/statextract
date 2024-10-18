@@ -7,7 +7,7 @@ import pyalex
 
 from statextract.helpers import assert_not_none
 from statextract.typedefs import PaperMD
-from statextract.md_retriever import convert_doi
+from statextract.md_retriever import parse_work
 @Memory('./.cache/openalex_fetcher').cache
 async def fetch_work(oalex_id: str) -> Work | None:
     try:
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     async def work():
         # print(await fetch_work(TEST_DOI))
         fetcher = OpenAlexFetcher()
-        print(await fetcher.fetch(assert_not_none(convert_doi(pyalex.Works()[f"https://doi.org/{TEST_DOI[0]}/{TEST_DOI[1]}"]))))
+        print(await fetcher.fetch(assert_not_none(parse_work(pyalex.Works()[f"https://doi.org/{TEST_DOI[0]}/{TEST_DOI[1]}"]))))
     
     asyncio.run(work())
     

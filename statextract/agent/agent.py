@@ -7,6 +7,7 @@ from rich import print
 import anthropic.types as atypes
 # import statextract.agent.prompt_caching_wrapper as atypes
 from statextract.agent.tools import TestCalculatorTool, Tool
+from anthropic.types.beta.prompt_caching.prompt_caching_beta_message import PromptCachingBetaMessage
 
 CacheControlable = atypes.MessageParam | atypes.ToolParam
 
@@ -58,7 +59,7 @@ async def _anthropic_tool_caller(
         tool_choice=must_call_arg,
     )
     
-    print(message)
+    # print(message)
     
     tool_results: list[atypes.ToolResultBlockParam] = []
 
@@ -113,6 +114,7 @@ async def _anthropic_tool_caller(
 async def _false(x: int, y: list[atypes.MessageParam]) -> bool:
     return False
 
+_AnthropicMessage = typing.Union[atypes.Message, PromptCachingBetaMessage]
 
 async def anthropic_call_tool(
     client: AsyncAnthropic,
@@ -128,9 +130,9 @@ async def anthropic_call_tool(
     prompt_caching: bool = True,
     must_call: bool | str = False,
     uncached_init_messages: list[atypes.MessageParam] = [],
-):
+) -> tuple[list[_AnthropicMessage], list[atypes.MessageParam]]:
     init_messages[-1] = append_cache_control_message(init_messages[-1], prompt_caching)
-    responses = []
+    responses: list[_AnthropicMessage] = []
     for i in range(max_steps):
         message, new_message_base = await _anthropic_tool_caller(
             client,

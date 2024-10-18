@@ -15,7 +15,9 @@ import pymupdf4llm
 from rich import print
 
 
-from statextract import helpers
+from statextract import helpers, storage
+from statextract.agent.stats_extractor_agent import UsageCounter, process_file
+from statextract.cache_typed import Cache
 from statextract.fetchers.fetchers import CachingPaperFetcher, CombinedPaperFetcher, PaperFetcher
 from statextract.helpers import DWECK, PaperMD, filter_mds_by_pdf, form_path_base
 from statextract.fetchers.lol_fetcher import LibraryLolFetcher
@@ -137,7 +139,12 @@ def extract_text(mds: list[PaperMD], pdf_path: Path, output_path: Path, image_pa
         return res
 
 # ('10.1152', 'ajpgi.1987.253.5.g601')
-
+cc = Cache()
+@cc(ignore=["md"])
+async def get_detailed_results(md: PaperMD, id: str):
+    uc = UsageCounter()
+    client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    return await process_file(client, md, uc)
 
 async def work():
     # fetcher = CachingPaperFetcher(CombinedPaperFetcher([OpenAlexFetcher()]))
@@ -192,37 +199,83 @@ async def work():
     client = instructor.from_anthropic(AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]))
     classify_fn = mk_classify_fn(client)
     
+    sem_prefilter = asyncio.Semaphore(2)
+    
+    prefilter_report_db = storage.prefilter_report_db()
+    
     async def pvalue_prefilter(md: PaperMD, text_path: Path):
+        if val := await prefilter_report_db.get(md.id):
+            return val.regex_match or (val.ai_response is not None and val.ai_response.is_nhst)
         
-        
-        async with sem:
+        async with sem_prefilter:
             if not text_path.exists():
                 return None
             text = text_path.read_text()
             first_pass = prefilter_regex(text)
             if first_pass is True:
+                await prefilter_report_db.set(md.id, storage.PrefilterReport(regex_match=True, ai_response=None))
                 return first_pass
+            # return False
+            
             try:
                 res = await classify_fn(md.title, md.first_author, text)
+                # print(res)
+                await prefilter_report_db.set(md.id, storage.PrefilterReport(regex_match=False, ai_response=res))
+                
                 return res.is_nhst
             except Exception as e:
                 print(f"Error classifying {md.id}: {e}")
                 raise e
-                return None
-            # return first_pass
     
     # with multiprocess.Pool(3) as p:
     #     res = list(p.starmap(pvalue_prefilter, [(md, Path("data/mds") / f"{form_path_base(md)}.md") for md in mds_successful]))
+    # mds_successful = [md for md in mds_successful if md.title == 'Learning to administrate, administrating to learn.']
+    
     
     res = await asyncio.gather(*[pvalue_prefilter(md, Path("data/mds") / f"{form_path_base(md)}.md") for md in mds_successful])
     
-    mds_with_filter_status = [md for (md, status) in zip(mds_with_pdfs, res) if status is not None]
+    mds_with_filter_status = [md for (md, status) in zip(mds_successful, res) if status]
     
     # print([md.title for md in mds])
     
+    # randomly sample 20
+    import random
+    random.seed(42)
+    mds_sample = random.sample(mds_with_filter_status, 20)[:5]
+    # mds_sample_ids = [md.id for md in mds_sample]
+    # mds_sample += random.sample([md for md in mds_with_filter_status if md.id not in mds_sample_ids], 20)
     
-    print(len(mds_with_filter_status))
-    print(res)
+    # remove base
+    mds_sample = [PaperMD(id=md.id, title=md.title, first_author=md.first_author, author_names=md.author_names, doi=md.doi, type=md.type) for md in mds_sample]
+    
+    # print(mds_sample[10].id)
+    
+    sem_detailed_results = asyncio.Semaphore(1)
+    async def get_detailed_results_wrapper(md: PaperMD, id: str):
+        if val := await storage.full_extraction_result_db().get(md.id):
+            return val
+        async with sem_detailed_results:
+            res = await get_detailed_results(md, id)
+            await storage.full_extraction_result_db().set(md.id, res)
+            return res
+        
+    mds_detailed_results = await asyncio.gather(*[get_detailed_results_wrapper(md, md.id) for md in tqdm(mds_sample)])
+    # p_vals = [[x[1] for x in r[2]] for r in mds_detailed_results]
+    # flattened_p_vals = [float(p) if p is not None else None for r in p_vals for p in r]
+    
+    # print(mds_detailed_results[10])
+    # print(flattened_p_vals)
+    # import pypcurve
+    # import matplotlib.pyplot as plt
+    # pc = pypcurve.PCurve([f"p={x}" for x in flattened_p_vals])
+    # # pc = pypcurve.PCurve(test_stats_flat_eq)
+    # # pc = pypcurve.PCurve(Z_strings)
+    
+    # ax = pc.plot_pcurve(dpi=100)
+    # plt.savefig("pcurve.png", dpi=300)
+    
+    # print(len(mds_with_filter_status))
+    # print([(md.title, status, f"data/pdfs/{form_path_base(md)}.pdf", f"data/mds/{form_path_base(md)}.md") for (md, status) in zip(mds_successful, res) if status is not None])
     # print([status for (md, status) in zip(mds_with_filter_status, res)])
     
     # print(len(filtered_dois))

@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from cache_typed import Cache
 from tqdm import tqdm
 
-from helpers import DWECK, PaperMD, assert_str, author, filter_mds_by_pdf, form_path_base, get_all_mds
+from helpers import DWECK, PaperMD, assert_str, fetch_author, filter_mds_by_pdf, form_path_base, get_all_mds
 import helpers
 load_dotenv()
 
@@ -259,7 +259,7 @@ def parse_test_statistics(test_statistics: list[str], prefer_not_p: bool = False
     
 async def work():
     # all_mds = list(Path("mds").glob("*.md"))
-    author_name = assert_str(author(helpers.TSAI)['display_name'])
+    author_name = assert_str(fetch_author(helpers.TSAI)['display_name'])
     all_mds = filter_mds_by_pdf(get_all_mds(helpers.TSAI))
     contents = [(Path("mds") / f"{form_path_base(md.doi)}.md").read_text() for md in all_mds]
     classifications = [await classify_nhst(md.title, author_name, content) for md, content in tqdm(list(zip(all_mds, contents)))]
