@@ -2,6 +2,7 @@ import copy
 import typing
 import asyncio
 from anthropic import AsyncAnthropic
+import anthropic
 from rich import print
 
 import anthropic.types as atypes
@@ -14,8 +15,9 @@ CacheControlable = atypes.MessageParam | atypes.ToolParam
 def append_cache_control_message(dct: atypes.MessageParam, enabled: bool) -> atypes.MessageParam:
     dct = copy.deepcopy(dct)
     if enabled and isinstance(dct["content"], list):
-        for c in dct["content"]:
-            c["cache_control"] = {"type": "ephemeral"}  # type: ignore
+        # for c in dct["content"]:
+        if len(dct["content"]) > 0:
+            dct["content"][-1]["cache_control"] = {"type": "ephemeral"}  # type: ignore
     return dct
 
 # def append_cache_control_tool(dct: atypes.ToolParam, enabled: bool) -> atypes.ToolParam:
@@ -33,6 +35,7 @@ async def _anthropic_tool_caller(
     max_tokens: int = 1024,
     prompt_caching: bool = True,
     must_call: bool | str = False,
+    temperature: float = 0.0,
 ):
 
     tool_dict = {t.name: t for t in tools}
@@ -56,7 +59,8 @@ async def _anthropic_tool_caller(
         system=[{"type": "text", "text": system_prompt}], # type: ignore
         tools=tool_descriptions,  # type: ignore
         messages=init_messages,
-        tool_choice=must_call_arg,
+        tool_choice=must_call_arg if len(tools) > 0 else anthropic.NotGiven(),
+        temperature=temperature,
     )
     
     # print(message)
@@ -130,8 +134,10 @@ async def anthropic_call_tool(
     prompt_caching: bool = True,
     must_call: bool | str = False,
     uncached_init_messages: list[atypes.MessageParam] = [],
+    temperature: float = 0.0,
 ) -> tuple[list[_AnthropicMessage], list[atypes.MessageParam]]:
-    init_messages[-1] = append_cache_control_message(init_messages[-1], prompt_caching)
+    if len(init_messages) > 0:
+        init_messages[-1] = append_cache_control_message(init_messages[-1], prompt_caching) 
     responses: list[_AnthropicMessage] = []
     for i in range(max_steps):
         message, new_message_base = await _anthropic_tool_caller(
@@ -143,6 +149,7 @@ async def anthropic_call_tool(
             max_tokens,
             prompt_caching,
             must_call=must_call,
+            temperature=temperature,
         )
         init_messages = init_messages + new_message_base
         responses.append(message)

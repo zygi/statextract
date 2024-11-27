@@ -282,5 +282,6 @@ async def work():
     
     # print(len(filtered_dois))
     
-asyncio.run(work())
+if __name__ == "__main__":
+    asyncio.run(work())
 # fetch_from_library_lol(dois[0])

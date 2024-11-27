@@ -82,19 +82,21 @@ class RExecTool(Tool[RExecInput, str]):
 T = typing.TypeVar("T", bound=function_calls.OpenAISchema)
 @final
 class AnswerTool(Tool[T, str], typing.Generic[T]):
-    def __init__(self, result_type: typing.Type[T], cb: typing.Callable[[T], typing.Awaitable[None]]):
+    def __init__(self, name: str, description: str, result_type: typing.Type[T], cb: typing.Callable[[T], typing.Awaitable[None]]):
         super().__init__(result_type, str)
         self.cb = cb
+        self._name = name
+        self._description = description
         # self.result_type = result_type
         
     @property
     def name(self) -> str:
-        return "AnswerTool"
+        return self._name
     
     @property
     def description(self) -> str:
-        return "This tool allows you to submit a result to the user."
-        
+        return self._description
+
     async def execute(self, input: T) -> str:
         await self.cb(input)
         return "Successfully submitted"

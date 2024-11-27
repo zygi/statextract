@@ -122,33 +122,44 @@ def img_to_bytes(img: Image.Image):
     img.save(buf, format="JPEG", quality=80)
     return buf.getvalue()
 
-def md_image_paths(md: PaperMD):
-    image_files = list(Path("data/images").glob(f"{form_path_base(md)}-*.jpg"))
+def md_image_paths(md: PaperMD, image_path: Path):
+    image_files = list(image_path.glob(f"{form_path_base(md)}-*.jpg"))
     image_files.sort(key=lambda x: int(x.stem.split("-")[-1]))
     return image_files
 
+def collect_model_images(md: PaperMD, image_path: Path = Path("data/images")):
+    image_files = md_image_paths(md, image_path)
+    images_transformed = [add_image_ruler_overlay(Image.open(img)) for img in image_files]
+    image_data = [(base64.b64encode(img_to_bytes(img)).decode(), img.size) for img in images_transformed]
+    return image_data
+
+def collect_model_text(md: PaperMD, md_path: Path = Path("data/mds")):
+    return (Path(md_path) / f"{form_path_base(md)}.md").read_text()
+
 def collect_model_inputs(md: PaperMD, md_path: Path = Path("data/mds"), image_path: Path = Path("data/images")):
     # fetch the text
-    md_text = (Path(md_path) / f"{form_path_base(md)}.md").read_text()
-
-    # fetch the images
-    # image_path_prefix = image_path / form_path_base(md)
-    # find all the images stored as `image_path / f"{form_path_base(md)}-{page.number}.jpg"`
-    image_files = md_image_paths(md)
+    md_text = collect_model_text(md, md_path)
+    return md_text, collect_model_images(md, image_path)
     
-    # image bytes
-    image_bytes = [img.read_bytes() for img in image_files]
-    # image_objs = [Image.open(io.BytesIO(img)) for img in image_bytes]
-    # sizes = [img.size for img in image_objs]
-    
-    # read the images as base64
-    image_objs = [Image.open(io.BytesIO(img)) for img in image_bytes]
-    images_transformed = [add_image_ruler_overlay(img) for img in image_objs]
 
-    image_data = [(base64.b64encode(img_to_bytes(img)).decode(), img.size) for img in images_transformed]
 
-    return md_text, image_data
+class UsageCounter(pydantic.BaseModel):
+    # cache_creation_input_tokens=9458, cache_read_input_tokens=0, input_tokens=22, output_tokens=284
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
     
+    def add_cache_creation_input_tokens(self, obj):
+        if hasattr(obj, "cache_creation_input_tokens"):
+            self.cache_creation_input_tokens += obj.cache_creation_input_tokens
+        if hasattr(obj, "cache_read_input_tokens"):
+            self.cache_read_input_tokens += obj.cache_read_input_tokens
+        if hasattr(obj, "input_tokens"):
+            self.input_tokens += obj.input_tokens
+        if hasattr(obj, "output_tokens"):
+            self.output_tokens += obj.output_tokens
+            
 # print(get_mds_with_dois("A5000930617"))
 
 # ('10.1152', 'ajpgi.1987.253.5.g601')

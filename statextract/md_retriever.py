@@ -16,7 +16,7 @@ def author_works(author_id: str):
     works = pyalex.Works().filter(author={"id": author_id}).paginate(per_page=100)
     return list(itertools.chain(*works))
 
-def parse_work(work: Any):
+def parse_work(work: Any) -> FullPaperMD:
     # print(work)
     doi = work['doi']
     if doi is None:

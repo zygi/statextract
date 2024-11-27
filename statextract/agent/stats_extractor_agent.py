@@ -10,7 +10,7 @@ import pydantic
 from statextract.agent.agent import anthropic_call_tool
 from statextract.agent.tools import RExecInput, RExecTool, Tool
 from statextract.cache_typed import Cache
-from statextract.helpers import collect_model_inputs, form_path_base
+from statextract.helpers import UsageCounter, collect_model_inputs, form_path_base
 from statextract.md_retriever import parse_work
 from statextract.typedefs import PaperMD
 from anthropic import AsyncAnthropic, types as atypes
@@ -263,23 +263,6 @@ class Holder[T]:
 
     # def set(self, value: T):
     #     self._value = value
-    
-class UsageCounter(pydantic.BaseModel):
-    # cache_creation_input_tokens=9458, cache_read_input_tokens=0, input_tokens=22, output_tokens=284
-    cache_creation_input_tokens: int = 0
-    cache_read_input_tokens: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    
-    def add_cache_creation_input_tokens(self, obj):
-        if hasattr(obj, "cache_creation_input_tokens"):
-            self.cache_creation_input_tokens += obj.cache_creation_input_tokens
-        if hasattr(obj, "cache_read_input_tokens"):
-            self.cache_read_input_tokens += obj.cache_read_input_tokens
-        if hasattr(obj, "input_tokens"):
-            self.input_tokens += obj.input_tokens
-        if hasattr(obj, "output_tokens"):
-            self.output_tokens += obj.output_tokens
     
 async def _process_file_claim(claim: ClaimSummary, client: AsyncAnthropic, tools: list[Tool], init_messages: list[atypes.MessageParam], usage_counter: UsageCounter) -> tuple[tuple[DetailedClaimRequest, float | None] | None, AbortRequest | None]:
     claim_res: Holder[tuple[DetailedClaimRequest, float | None]] = Holder()
