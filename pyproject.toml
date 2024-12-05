@@ -21,4 +21,7 @@ dependencies = [
     "pypcurve>=0.1.1",
     "pillow>=11.0.0",
     "aiodbm>=0.4.2",
+    "tqdm>=4.66.5",
+    "label-studio-sdk>=1.0.8",
+    "pyperclip>=1.9.0",
 ]

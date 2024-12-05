@@ -184,13 +184,25 @@ def template_generator():
     
         next_claim_question = f"""
         
-        <Header value="Is there another, substantially differentclaim in the abstract?"/>
+        <Header value="Is there another, substantially different claim in the abstract?"/>
         <Choices name="claim{claim_num}-has-next-claim" choice="single-radio" toName="pages{claim_num}">
         <Choice value="Yes" />
         <Choice value="No" />
         </Choices>
         """
     
+        CLAIM_DETAILS_PLACEHOLDER = """\
+If the claim above is ambiguous and doesn't identify a precise single hypothesis, please add details to make the claim specific, so that the details unambiguously identify \
+a p-value reported in the paper. Make an arbitrary choice if necessary. E.g. if the claim was 'The intervention significantly changed personality scores of participants', \
+and the result table reported five rows for different personality scores, please choose one score and describe the choice made.
+"""
+
+#         CLAIM_DETAILS_PLACEHOLDER = """\
+# Given the claim above, choose one P-value in the paper that represents the claim. Describe any choices made, if any, \
+# in this field. For example, if the claim is 'The intervention significantly changed personality scores of participants', \
+# and the result table reports five rows for different personality score types, choose one type and describe the choice made. \
+# A reviewer should be able to read the claim above, and the specific details here, and unambiguously identify the P-value in the paper."""
+
         return f"""
 <View style="display: flex; flex-direction: row" {hidden_unless_more_claims_filter if hidden_unless_more_claims else ""}>
 
@@ -213,7 +225,7 @@ def template_generator():
         <Header value="Specific claim details"/>
         <TextArea name="claim{claim_num}-claim-narrowing" 
                 toName="pages{claim_num}" 
-                placeholder="Given the claim above, choose one P-value in the paper that represents the claim. Describe any choices made, if any, in this field. For example, if the claim is 'The intervention significantly changed personality scores of participants', and the result table reports five rows for different personality score types, choose one type and describe the choice made. A reviewer should be able to read the claim above, and the specific details here, and unambiguously identify the P-value in the paper."
+                placeholder="{CLAIM_DETAILS_PLACEHOLDER}"
                 rows="4" 
                 editable="true"
                 maxSubmissions="1"
@@ -227,7 +239,9 @@ def template_generator():
         <TextArea name="claim{claim_num}-pvalue-val" toName="pages{claim_num}" placeholder="e.g. 0.05, 0.00215, 3.2e-5" editable="false" 
                 showSubmitButton="false" maxSubmissions="1"/>
                 
-                
+        <Header value="Other test statistics (one per entry)"/>                
+        <TextArea name="claim{claim_num}-other-test-stats" toName="pages{claim_num}" placeholder="e.g. t(88)=2.1, r(147)=.246, F(1,100)=9.1, f(2,210)=4.45, Z=3.45, chi2(1)=9.1, r(77)=.47, chi2(2)=8.74" editable="false" 
+                showSubmitButton="true" rows="1"/>
         
         <Header value="Mark the region where the p-value is reported in the paper's images to the right."/>        
         <Choices name="claim{claim_num}-pvalue-reported-confirmation" toName="pages{claim_num}">
@@ -257,6 +271,6 @@ def template_generator():
         
 if __name__ == "__main__":
     # copy to clipboard
-    # import pyperclip
-    # pyperclip.copy(template_generator())
-    work(args.parse_args())
+    import pyperclip
+    pyperclip.copy(template_generator())
+    # work(args.parse_args())
