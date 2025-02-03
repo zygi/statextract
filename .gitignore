@@ -165,3 +165,6 @@ vendor/
 data/
 cache/
 *.png
+logs/
+
+*.duckdb

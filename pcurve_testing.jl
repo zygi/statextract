@@ -25,11 +25,32 @@ using SparseArrays
 
 
 # ENV["PYCALL_JL_RUNTIME_PYTHON"] = "/Users/zygi/python/statextract/.venv/bin/python"
-# ENV["VIRTUAL_ENV"] = readchomp(`realpath ./.venv`)
+ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
+ENV["JULIA_PYTHONCALL_EXE"] = readchomp(`realpath -s ./.venv/bin/python`)
+ENV["VIRTUAL_ENV"] = readchomp(`realpath -s ./.venv`)
 
-# using PyCall
+using PythonCall
 
+
+# @pya `import sys; ans=sys.executable`
 # pyimport("sys").executable
+
+torch = pyimport("torch")
+torch.random.manual_seed(0)
+
+transformers = pyimport("transformers")
+model = transformers.Phi3ForCausalLM.from_pretrained( 
+    "microsoft/Phi-3-mini-128k-instruct",  
+    device_map="cpu",  
+    torch_dtype="auto",  
+    trust_remote_code=true,  
+) 
+
+
+##
+
+py_wt = pyconvert(Matrix, model.lm_head.weight.type(torch.float32).detach().numpy())
+
 
 # py"""
 # import torch 
@@ -75,13 +96,25 @@ b = spzeros(N_DIM-1)
 
 A_p = A * py_wt
 
-ph2 = polyhedron(hrep(sparse(A_p), spzeros(size(A_p, 1))), DefaultLibrary{Float64}(solver)); 
+ph2 = polyhedron(hrep(A_p, zeros(size(A_p, 1))), DefaultLibrary{Float64}(solver)); 
+
+# hss = halfspaces(ph2)
+
 
 ##
 
+# new_hrep = detecthlinearity(hrep(ph2), solver);
 
+# fulldim(new_hrep)
+# fulldim(hrep(ph2))
+
+# isredundant(hrep(ph2), first(hss))
 
 A_red = removehredundancy(hrep(ph2), solver)
+
+
+
+
 # nhalfspaces(ph2)
 
 # ph = polyhedron(hrep(A, b), DefaultLibrary{Float32}(solver))

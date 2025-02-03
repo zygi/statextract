@@ -1,0 +1,19 @@
+source: MYSQL
+target: LOCAL
+
+defaults:
+  target_options:
+    format: parquet
+
+streams:
+  main.scimag:
+    sql: select DOI from scimag
+    object: file:///home/nonagon/python/pcurves/data/oalex/magic_dois_parquet
+    primary_key: [DOI]
+    mode: incremental
+    # mode: full-refresh
+    target_options:
+      file_max_rows: 1000000
+      codec: zstd
+    columns:
+      - DOI: string

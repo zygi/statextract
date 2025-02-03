@@ -6,7 +6,6 @@ import anthropic
 from rich import print
 
 import anthropic.types as atypes
-# import statextract.agent.prompt_caching_wrapper as atypes
 from statextract.agent.tools import TestCalculatorTool, Tool
 from anthropic.types.beta.prompt_caching.prompt_caching_beta_message import PromptCachingBetaMessage
 
@@ -25,6 +24,8 @@ def append_cache_control_message(dct: atypes.MessageParam, enabled: bool) -> aty
 #     if enabled:
 #         dct["cache_control"] = {"type": "ephemeral"}  # type: ignore
 #     return dct
+
+    
     
 async def _anthropic_tool_caller(
     client: AsyncAnthropic,
@@ -115,7 +116,7 @@ async def _anthropic_tool_caller(
     return message, new_message_base
 
 
-async def _false(x: int, y: list[atypes.MessageParam]) -> bool:
+async def _false(x: int, y) -> bool:
     return False
 
 _AnthropicMessage = typing.Union[atypes.Message, PromptCachingBetaMessage]
@@ -164,6 +165,155 @@ async def anthropic_call_tool(
     return responses, init_messages
 
 
+
+from openai import AsyncOpenAI, NotGiven
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam, ChatCompletionMessage, ChatCompletionAssistantMessageParam,ChatCompletionMessageToolCallParam, ChatCompletion
+from openai.types.completion_usage import CompletionUsage, CompletionTokensDetails, PromptTokensDetails
+from openai.types.chat.chat_completion import Choice
+    
+# class FunctionCallLog(TypedDict):
+    
+async def _openai_tool_caller(
+    client: AsyncOpenAI,
+    tools: typing.Sequence[Tool],
+    init_messages: list[ChatCompletionMessageParam],
+    system_prompt: str,
+    model: str = "gpt-4o-mini",
+    max_tokens: int = 1024,
+    must_call: bool | str = False,
+    temperature: float = 0.0,
+) -> tuple[ChatCompletion, list[ChatCompletionMessageParam]]:
+    messages: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
+    for msg in init_messages:
+        messages.append(msg)
+
+    tools_list = [
+        ChatCompletionToolParam(
+            type="function",
+            function={
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.input_type.model_json_schema()
+            }
+        )
+        for tool in tools
+    ]
+
+    response = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=tools_list,
+        tool_choice="auto" if must_call else NotGiven(),
+        max_tokens=max_tokens,
+        temperature=temperature
+    )
+
+    message = response.choices[0]
+    new_message: ChatCompletionAssistantMessageParam = ChatCompletionAssistantMessageParam(
+        role="assistant",
+        content=message.message.content,
+        tool_calls=[ChatCompletionMessageToolCallParam(
+            id=tool_call.id,
+            function={
+                "name": tool_call.function.name,
+                "arguments": tool_call.function.arguments
+            },
+            type="function"
+        ) for tool_call in message.message.tool_calls] if message.message.tool_calls else [],
+        refusal=message.message.refusal,
+    )
+    
+    tool_call_responses: list[ChatCompletionMessageParam] = []
+
+    for tool_call in message.message.tool_calls or []:
+        tool_name = tool_call.function.name
+        tool = next(t for t in tools if t.name == tool_name)
+        
+        try:
+            result = await tool.run(tool_call.function.arguments)
+            formatted_result = await tool.format_output(result)
+            
+            tool_message: ChatCompletionMessageParam = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": formatted_result
+            }
+            
+            tool_call_responses.append(tool_message)
+            
+        except Exception as e:
+            error_message: ChatCompletionMessageParam = {
+                "role": "tool", 
+                "tool_call_id": tool_call.id,
+                "content": f"Error: {str(e)}"
+            }
+            tool_call_responses.append(error_message)
+            
+    return response, [new_message] + tool_call_responses
+
+async def openai_call_tool(
+    client: AsyncOpenAI,
+    tools: typing.Sequence[Tool],
+    init_messages: list[ChatCompletionMessageParam],
+    system_prompt: str,
+    model: str = "gpt-4o-mini",
+    max_tokens: int = 1024,
+    should_stop: typing.Callable[
+        [int, list[ChatCompletionMessageParam]], typing.Awaitable[bool]
+    ] = _false,
+    max_steps: int = 20,
+    must_call: bool | str = False,
+    temperature: float = 0.0,
+) -> tuple[list[ChatCompletion], list[ChatCompletionMessageParam]]:
+    # no explicit caching bc openai doesn't support it
+    responses: list[ChatCompletion] = []
+    for i in range(max_steps):
+        message, new_message_base = await _openai_tool_caller(
+            client,
+            tools,
+            init_messages,
+            system_prompt,
+            model,
+            max_tokens,
+            must_call=must_call,
+            temperature=temperature,
+        )
+        init_messages = init_messages + new_message_base
+        responses.append(message)
+        if (
+            message.choices[0].finish_reason == "stop"
+            or message.choices[0].finish_reason == "length"
+            or message.choices[0].finish_reason == "content_filter"
+        ):
+            break
+        if await should_stop(i, new_message_base) or i == max_steps - 1:
+            break
+        
+    return responses, init_messages
+
+def collate_openai_stats(responses: list[ChatCompletion]) -> CompletionUsage:
+    state = CompletionUsage(
+        completion_tokens=0,
+        prompt_tokens=0,
+        total_tokens=0,
+    )
+    for response in responses:
+        if response.usage:
+            state.completion_tokens += response.usage.completion_tokens
+            state.prompt_tokens += response.usage.prompt_tokens
+            state.total_tokens += response.usage.total_tokens
+            if response.usage.completion_tokens_details:
+                if state.completion_tokens_details is None:
+                    state.completion_tokens_details = CompletionTokensDetails()
+                state.completion_tokens_details.audio_tokens = response.usage.completion_tokens_details.audio_tokens
+                state.completion_tokens_details.reasoning_tokens = response.usage.completion_tokens_details.reasoning_tokens
+            if response.usage.prompt_tokens_details:
+                if state.prompt_tokens_details is None:
+                    state.prompt_tokens_details = PromptTokensDetails()
+                state.prompt_tokens_details.audio_tokens = response.usage.prompt_tokens_details.audio_tokens
+                state.prompt_tokens_details.cached_tokens = response.usage.prompt_tokens_details.cached_tokens
+    return state
+
 # test
 if __name__ == "__main__":
     # tool = RExecTool()
@@ -184,12 +334,11 @@ if __name__ == "__main__":
     #     print(x)
 
     # st = AnswerTool(TestAnswer, print_cb)
-
-    client = AsyncAnthropic(
-    )
+    import openai
+    client = openai.AsyncOpenAI()
 
     async def test_tool():
-        res = await anthropic_call_tool(
+        responses, msg_trace = await openai_call_tool(
             client,
             [TestCalculatorTool()],
             [
@@ -200,9 +349,9 @@ if __name__ == "__main__":
                 }
             ],
             "You MUST use the TestCalculatorTool to perform basic arithmetic operations. Do not do mental arithmetic.",
-            max_steps=1,
-            prompt_caching=True,
+            max_steps=5,
+            model="gpt-4o"
         )
-        # print(res)
+        print(collate_openai_stats(responses))
 
     asyncio.run(test_tool())
